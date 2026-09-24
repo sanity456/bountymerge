@@ -16,7 +16,7 @@ Request text and model output are untrusted. The validator does not merely accep
 
 ## Local development
 
-Requires Node 24+ and a GenLayer Python environment for contract checks.
+Requires Node 24+ and a GenLayer Python environment for contract checks. Python-only test dependencies are listed in `tests/requirements.txt`; they are not installed by Vercel.
 
 ```powershell
 npm ci
