@@ -39,6 +39,8 @@ python -m pytest tests/direct -q
 
 The direct tests exercise author binding, duplicate guards, immutability, rejection/retry, approval withdrawal, two-owner completion, and validator disagreement/audit failures. Their LLM responses are mocked; **they do not prove live validator consensus**. A clean live Studio Next test with two funded wallets is required before a submission-ready claim.
 
+Run `npm run live:prepare` to create two disposable Studio Next test identities and inspect their balances and baseline protocol fee quote. Their private keys stay in the ignored `.sites-runtime/` folder on this computer; only the public addresses should be shared. This command sends no transactions. Fund only with free **Studio Next test GEN on chain 61997**, never mainnet assets. Actual per-action fees must be checked again immediately before each write.
+
 ## Reviewer verification after deployment
 
 Use two separate Studio Next wallet accounts, each with enough free test GEN for the displayed fees. Create a project, publish one CSV-export request from each wallet, compare them, inspect the status and mapped brief, approve from wallet A and then wallet B, and verify both originals remain visible while the comparison becomes `MERGED`. Also compare a materially different request, and reject a draft to verify a new round can be run without rewriting the originals. Record the contract address, transaction hashes, public source revision, and the exact result; do not substitute local mocked tests for this proof.
