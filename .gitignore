@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env.local
+.venv/
+.pytest_cache/
+__pycache__/
+.sites-runtime/
+artifacts/
