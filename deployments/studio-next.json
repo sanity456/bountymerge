@@ -1,0 +1,26 @@
+{
+  "chain_id": 61997,
+  "rpc": "https://studio-dev.genlayer.com/api",
+  "policy": "bountymerge/pair-v4",
+  "contract_address": "0xeBf490623C62C030905c9Ea7cD079DE7Eb3D0A3E",
+  "source_sha256": "f7edf2dcc32e2ae0ddb13ea8a83139ab513ffd8065c7d8b4838a56671f855156",
+  "deployment_transaction": "0x2f93c11030aba8b0f423d58cad48d48eebe93617cbb224b608b50cf5448a81ae",
+  "project_id": "28e5f3be2513ea0bd70fa50a61d7e0ffc68e2af527e6ff5b95b9276e10df96e1",
+  "comparison_id": "023cf8ffd9adcfcbc7e8f7e4e4bd7eff4878b73e894408001e0babd47f2a326b",
+  "comparison_transaction": "0xb9becfda22b6240182c164eb9b89e75cd746764165520bd6984e8d1c1389cde3",
+  "approval_a_transaction": "0x414ba8291ae0403cfb9fad61b45a32355feaed786403a6fd323cdc4a5db4bb4d",
+  "approval_b_transaction": "0x5eae67ff1428b594857869629a8b8050a92310a1e7ee0aee34cd7201c7245b6c",
+  "verification": {
+    "status": "MERGEABLE",
+    "final_state": "MERGED",
+    "both_requests_preserved": true,
+    "validator_votes_on_comparison": ["agree", "agree", "disagree", "agree"],
+    "brief_lines": [
+      "Export tx history as Excel-compatible CSV with date, token, amount, hash/ID",
+      "Add date range selector",
+      "Exclude private notes"
+    ],
+    "coverage_a": [0, 1],
+    "coverage_b": [0, 0]
+  }
+}

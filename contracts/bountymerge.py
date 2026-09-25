@@ -5,7 +5,7 @@ from genlayer.types import Address, u256
 import hashlib
 import json
 
-POLICY = "bountymerge/pair-v1"
+POLICY = "bountymerge/pair-v4"
 
 
 def fail(message: str):
@@ -50,8 +50,18 @@ def parse_comparison(raw, a: dict, b: dict) -> dict:
     if not isinstance(raw, dict) or raw.get("status") not in ("MERGEABLE", "SEPARATE", "UNCLEAR"):
         raise gl.vm.UserError("[LLM_ERROR] INVALID_STATUS")
     reason = raw.get("reason")
-    if not isinstance(reason, str) or not 15 <= len(reason.strip()) <= 500:
+    if reason is None:
+        for alias in ("explanation", "rationale", "reasoning", "analysis"):
+            if isinstance(raw.get(alias), str):
+                reason = raw[alias]
+                break
+    # Length is not a proxy for truth. Bound storage/UI size without rejecting
+    # a supported but verbose explanation; validators audit the bounded text.
+    if not isinstance(reason, str) or not reason.strip():
         raise gl.vm.UserError("[LLM_ERROR] INVALID_REASON")
+    reason = reason.strip()
+    if len(reason) > 500:
+        reason = reason[:497].rstrip() + "..."
     lines, ca, cb = raw.get("brief_lines"), raw.get("coverage_a"), raw.get("coverage_b")
     if not isinstance(lines, list) or not isinstance(ca, list) or not isinstance(cb, list):
         raise gl.vm.UserError("[LLM_ERROR] INVALID_BRIEF")
@@ -64,7 +74,7 @@ def parse_comparison(raw, a: dict, b: dict) -> dict:
             raise gl.vm.UserError("[LLM_ERROR] INVALID_COVERAGE_INDEX")
     elif lines or ca or cb:
         raise gl.vm.UserError("[LLM_ERROR] NONMERGE_HAS_BRIEF")
-    return {"status": raw["status"], "reason": reason.strip(), "brief_lines": lines,
+    return {"status": raw["status"], "reason": reason, "brief_lines": lines,
             "coverage_a": ca, "coverage_b": cb}
 
 
@@ -79,6 +89,8 @@ insufficient. Return SEPARATE for incompatible or clearly different work;
 UNCLEAR if missing detail prevents an honest decision. Never invent requirements.
 Return JSON: {"status":"MERGEABLE|SEPARATE|UNCLEAR","reason":"specific explanation",
 "brief_lines":["implementable deliverable line"],"coverage_a":[0],"coverage_b":[0]}.
+Keep the reason under 450 characters. Name the overlap, conflict, or missing detail;
+mention any material exclusion. Do not answer with just yes or no.
 For MERGEABLE, every original requirement must map, in order, to a zero-based
 brief line that actually preserves it. Preserve material exclusions in the brief.
 For SEPARATE or UNCLEAR use empty arrays for brief_lines and both coverage lists.

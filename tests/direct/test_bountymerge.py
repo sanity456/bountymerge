@@ -143,3 +143,32 @@ def test_validator_agrees_on_fully_supported_brief(board, direct_vm, direct_alic
     direct_vm.mock_llm("^BOUNTYMERGE_AUDIT_V1", json.dumps({"reason_supported": True,
         "coverage_a": [True, True], "coverage_b": [True, True], "exclusions_supported": True}))
     assert direct_vm.run_validator() is True
+
+
+def test_short_reason_is_audited_instead_of_bricking_comparison(board, direct_vm, direct_alice):
+    contract, _, first, second = board
+    direct_vm.sender = direct_alice
+    direct_vm.clear_mocks()
+    result = candidate()
+    result["reason"] = "Both want CSV."
+    direct_vm.mock_llm("^BOUNTYMERGE_COMPARE_V1", json.dumps(result))
+    contract.compare_requests(first, second)
+    direct_vm.mock_llm("^BOUNTYMERGE_AUDIT_V1", json.dumps({"reason_supported": False,
+        "coverage_a": [True, True], "coverage_b": [True, True], "exclusions_supported": True}))
+    assert direct_vm.run_validator() is False
+
+
+def test_verbose_reason_is_bounded_and_audited(board, direct_vm, direct_alice):
+    contract, project, first, second = board
+    direct_vm.sender = direct_alice
+    direct_vm.clear_mocks()
+    result = candidate()
+    result["reason"] = "Both requests have overlapping CSV needs. " * 30
+    direct_vm.mock_llm("^BOUNTYMERGE_COMPARE_V1", json.dumps(result))
+    contract.compare_requests(first, second)
+    comparison = contract.list_comparisons(project, 0, 20)["items"][0]
+    assert 100 < len(comparison["result"]["reason"]) <= 500
+    assert comparison["result"]["reason"].endswith("...")
+    direct_vm.mock_llm("^BOUNTYMERGE_AUDIT_V1", json.dumps({"reason_supported": False,
+        "coverage_a": [True, True], "coverage_b": [True, True], "exclusions_supported": True}))
+    assert direct_vm.run_validator() is False
