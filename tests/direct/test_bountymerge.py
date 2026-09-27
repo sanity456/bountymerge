@@ -84,6 +84,41 @@ def test_rejected_round_remains_and_new_round_is_possible(board, direct_vm, dire
     assert contract.get_comparison(old_id)["state"] == "REJECTED"
 
 
+def test_closed_unclear_pair_can_be_rescreened(board, direct_vm, direct_alice):
+    contract, _, first, second = board
+    direct_vm.sender = direct_alice
+    old_id = compare(contract, direct_vm, first, second, "UNCLEAR")
+    assert contract.get_comparison(old_id)["state"] == "CLOSED"
+    new_id = compare(contract, direct_vm, first, second, "MERGEABLE")
+    assert new_id != old_id
+    assert contract.get_comparison(old_id)["state"] == "CLOSED"
+    assert contract.get_comparison(new_id)["round"] == 1
+    assert contract.get_comparison(new_id)["state"] == "AWAITING_APPROVAL"
+
+
+def test_request_has_only_one_active_comparison(board, direct_vm, direct_alice, direct_bob, direct_charlie):
+    contract, project, first, second = board
+    direct_vm.sender = direct_charlie
+    contract.submit_request(project, "Third CSV request", "Another owner wants a CSV export.",
+                            json.dumps(["Provide a CSV file for Excel.", "Include dates and token amounts."]), "[]")
+    third = contract.list_requests(project, 0, 20)["items"][2]["id"]
+    pending_id = compare(contract, direct_vm, first, second)
+    with direct_vm.expect_revert("REQUEST_HAS_PENDING_COMPARISON"):
+        compare(contract, direct_vm, first, third)
+    direct_vm.sender = direct_alice
+    contract.reject_comparison(pending_id)
+    direct_vm.sender = direct_charlie
+    next_id = compare(contract, direct_vm, first, third)
+    assert contract.get_comparison(next_id)["state"] == "AWAITING_APPROVAL"
+    direct_vm.sender = direct_alice
+    contract.set_approval(next_id, True)
+    direct_vm.sender = direct_charlie
+    contract.set_approval(next_id, True)
+    assert contract.get_comparison(next_id)["state"] == "MERGED"
+    assert first not in contract.active_comparison
+    assert third not in contract.active_comparison
+
+
 def test_separate_result_has_no_approval_path(board, direct_vm, direct_alice):
     contract, _, first, second = board
     direct_vm.sender = direct_alice
@@ -133,6 +168,17 @@ def test_validator_rejects_status_disagreement(board, direct_vm, direct_alice):
     direct_vm.sender = direct_alice
     compare(contract, direct_vm, first, second)
     direct_vm.mock_llm("^BOUNTYMERGE_COMPARE_V1", json.dumps(candidate("SEPARATE")))
+    assert direct_vm.run_validator() is False
+
+
+@pytest.mark.parametrize("coverage_a,coverage_b", [([1, 1], [1, 1]), ([True, 1], [True, True])])
+def test_validator_rejects_non_boolean_coverage(board, direct_vm, direct_alice, coverage_a, coverage_b):
+    contract, _, first, second = board
+    direct_vm.sender = direct_alice
+    compare(contract, direct_vm, first, second)
+    direct_vm.mock_llm("^BOUNTYMERGE_AUDIT_V1", json.dumps({
+        "reason_supported": True, "coverage_a": coverage_a, "coverage_b": coverage_b,
+        "exclusions_supported": True}))
     assert direct_vm.run_validator() is False
 
 

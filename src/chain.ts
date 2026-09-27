@@ -2,6 +2,7 @@ import { abi, createClient, createFeesDistribution, normalizeMessageFeeAllocatio
 import { TransactionHashVariant, type TransactionHash } from "genlayer-js/types";
 import { formatUnits } from "viem";
 import { CHAIN, CHAIN_ID, type Provider, assertWallet } from "./wallet";
+import { retryRead } from "./retry";
 
 export const CONTRACT = import.meta.env.VITE_BOUNTYMERGE_CONTRACT || "";
 export const configured = /^0x[0-9a-fA-F]{40}$/.test(CONTRACT) && !/^0x0{40}$/i.test(CONTRACT);
@@ -65,7 +66,11 @@ export async function quoteAndSubmit(provider: Provider, account: `0x${string}`,
 export async function waitFinal(hash: `0x${string}`, onStatus: (status: string) => void): Promise<void> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw Error("Invalid transaction hash.");
   for (let attempt = 0; attempt < 120; attempt++) {
-    const receipt = plain(await reader.getTransaction({ hash: hash as TransactionHash })) as Record<string, unknown>;
+    const receipt = plain(await retryRead(
+      () => reader.getTransaction({ hash: hash as TransactionHash }),
+      attempt => onStatus(`NETWORK RETRY ${attempt}/4`),
+      () => new Promise(resolve => setTimeout(resolve, 6000)),
+    )) as Record<string, unknown>;
     const status = String(receipt.statusName ?? receipt.status ?? "UNKNOWN").toUpperCase();
     onStatus(status);
     if (status === "FINALIZED") {

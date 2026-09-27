@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronDown, CircleHelp, GitMerge, Layers3, Link2, Plus, RefreshCw, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
 import { configured, CONTRACT, quoteAndSubmit, read, waitFinal } from "./chain";
 import { Action, Comparison, Page, Project, Request, cleanLines, selectedDistinctPair, shortAddress, validateRequest } from "./model";
@@ -37,8 +37,11 @@ export default function App() {
   const [account, setAccount] = useState<`0x${string}` | "">("");
   const [projectPage, setProjectPage] = useState<Page<Project>>(emptyPage());
   const [projectId, setProjectId] = useState("");
+  const [loadedProjectId, setLoadedProjectId] = useState("");
   const [requestPage, setRequestPage] = useState<Page<Request>>(emptyPage());
   const [comparisonPage, setComparisonPage] = useState<Page<Comparison>>(emptyPage());
+  const [dataError, setDataError] = useState("");
+  const projectReadGeneration = useRef(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [activeComparisonId, setActiveComparisonId] = useState("");
   const [form, setForm] = useState<FormName>(null);
@@ -58,8 +61,8 @@ export default function App() {
 
   const preview = !configured;
   const projects = preview ? [SAMPLE_PROJECT] : projectPage.items;
-  const requests = preview ? SAMPLE_REQUESTS : requestPage.items;
-  const comparisons = preview ? [SAMPLE_COMPARISON] : comparisonPage.items;
+  const requests = preview ? SAMPLE_REQUESTS : loadedProjectId === projectId ? requestPage.items : [];
+  const comparisons = preview ? [SAMPLE_COMPARISON] : loadedProjectId === projectId ? comparisonPage.items : [];
   const currentProjectId = preview ? SAMPLE_PROJECT.id : projectId;
   const currentProject = projects.find(p => p.id === currentProjectId);
   const activeComparison = comparisons.find(c => c.id === activeComparisonId) || null;
@@ -83,23 +86,37 @@ export default function App() {
 
   const refreshProjects = useCallback(async (preferredName?: string) => {
     if (!configured) return;
+    setDataError("");
     try {
       const page = await readAll<Project>("list_projects");
       setProjectPage(page);
       setProjectId(id => page.items.find(project => preferredName && project.name === preferredName.trim() && isOwner(account, project.owner))?.id ||
         (page.items.some(project => project.id === id) ? id : page.items[0]?.id || ""));
-    } catch (e) { setError(String(e)); }
+    } catch (e) { setDataError(`Could not load projects: ${(e as Error).message}`); }
   }, [account]);
   const refreshProject = useCallback(async () => {
-    if (!configured || !projectId) return;
+    const generation = ++projectReadGeneration.current;
+    if (!configured || !projectId) {
+      setRequestPage(emptyPage());
+      setComparisonPage(emptyPage());
+      setLoadedProjectId("");
+      return;
+    }
+    setDataError("");
+    setRequestPage(emptyPage());
+    setComparisonPage(emptyPage());
     try {
       const [newRequests, newComparisons] = await Promise.all([
         readAll<Request>("list_requests", projectId),
         readAll<Comparison>("list_comparisons", projectId),
       ]);
+      if (generation !== projectReadGeneration.current) return;
       setRequestPage(newRequests);
       setComparisonPage(newComparisons);
-    } catch (e) { setError(String(e)); }
+      setLoadedProjectId(projectId);
+    } catch (e) {
+      if (generation === projectReadGeneration.current) setDataError(`Could not load this project: ${(e as Error).message}`);
+    }
   }, [projectId]);
   useEffect(() => { void refreshProjects(); }, [refreshProjects]);
   useEffect(() => { setSelected([]); setActiveComparisonId(""); void refreshProject(); }, [refreshProject]);
@@ -110,8 +127,9 @@ export default function App() {
     catch (e) { setError((e as Error).message); }
   };
   const toggle = (id: string) => setSelected(current => current.includes(id) ? current.filter(x => x !== id) : current.length < 2 ? [...current, id] : [current[1], id]);
-  const requestAction = (next: Action) => { setError(""); setNotice(""); setAction(next); };
+  const requestAction = (next: Action) => { if (busy) return; setError(""); setNotice(""); setAction(next); };
   const execute = async () => {
+    if (busy) return;
     if (!action || !provider || !account) { setError("Connect a wallet before signing."); return; }
     const current = action;
     setAction(null); setBusy(true); setError(""); setTxHash("");
@@ -151,7 +169,13 @@ export default function App() {
         <div className="hero-art" aria-hidden="true"><div className="art-glow"/><div className="art-card art-left"><span className="art-tag">REQUEST 01</span><strong>Export history<br/>as CSV</strong><span className="art-mini">Dates • amounts • tokens</span></div><div className="art-card art-right"><span className="art-tag">REQUEST 02</span><strong>Activity for<br/>Excel</strong><span className="art-mini">Spreadsheet ready</span></div><div className="art-merge"><GitMerge size={24}/></div><div className="art-brief"><span>SHARED BRIEF</span><strong>One export. Both needs.</strong><div className="brief-line"/><div className="brief-line short"/></div></div></div></section>
       <section className="workspace-wrap" id="workspace"><div className="workspace-heading"><div><span className="section-kicker">THE WORKSPACE</span><h2>Find the common thread.</h2><p>Explore requests, compare a pair, and track their owners’ decisions.</p></div><div className="workspace-actions"><button className="ghost-button" onClick={() => { void refreshProjects(); void refreshProject(); }} disabled={busy || preview}><RefreshCw size={16}/> Refresh</button><button className="dark-button" onClick={() => setForm("project")} disabled={busy || preview}><Plus size={17}/> New project</button></div></div>
         {preview && <div className="preview-banner"><Sparkles size={18}/><span><strong>Product preview.</strong> These sample requests show the intended workflow. Live GenLayer actions become available after deployment.</span></div>}
-        {(error || notice || txHash) && <div className={`notice ${error ? "is-error" : ""}`} role="status">{error || notice}{txHash && <a href={`${EXPLORER}/transactions/${txHash}`} target="_blank" rel="noreferrer">Transaction {idShort(txHash)} <ArrowUpRight size={13}/></a>}{account && !busy && localStorage.getItem(`bountymerge:pending:${account.toLowerCase()}`) && <button onClick={() => void resume()}>Resume tracking</button>}{busy && txStatus && <small>{txStatus}</small>}</div>}
+        {(error || notice || txHash || dataError) && <div className={`notice ${(error || dataError) ? "is-error" : ""}`} role={(error || dataError) ? "alert" : "status"}>
+          {error || dataError || notice}
+          {dataError && <button onClick={() => { void refreshProjects(); void refreshProject(); }}>Retry loading</button>}
+          {txHash && <a href={`${EXPLORER}/transactions/${txHash}`} target="_blank" rel="noreferrer">Transaction {idShort(txHash)} <ArrowUpRight size={13}/></a>}
+          {account && !busy && localStorage.getItem(`bountymerge:pending:${account.toLowerCase()}`) && <button onClick={() => void resume()}>Resume tracking</button>}
+          {busy && txStatus && <small>{txStatus}</small>}
+        </div>}
         <div className="workspace-grid"><aside className="side-panel"><div className="side-label">PROJECT SPACE</div><div className="project-select"><Layers3 size={18}/><select aria-label="Select project" value={currentProjectId} onChange={e => setProjectId(e.target.value)} disabled={preview || busy}>{projects.length ? projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>) : <option value="">No projects yet</option>}</select><ChevronDown size={14}/></div><p className="project-description">{currentProject?.description || "Create a project to start collecting requests."}</p><div className="side-divider"/><div className="side-label">YOUR BOARD</div><button className={`side-link ${tab === "requests" ? "active" : ""}`} onClick={() => setTab("requests")}><Layers3 size={17}/> Feature requests <span>{requests.length}</span></button><button className={`side-link ${tab === "matches" ? "active" : ""}`} onClick={() => setTab("matches")}><GitMerge size={17}/> Comparisons <span>{comparisons.length}</span></button><div className="side-bottom"><div className="side-illustration"><span>✳</span><span>✴</span><span>✳</span></div><strong>More signal.<br/>Less repetition.</strong><p>Good ideas find more support when they work together.</p></div></aside>
           <div className="board-panel"><div className="board-top"><div><span className="section-kicker">{tab === "requests" ? "COMMUNITY IDEAS" : "SHARED POSSIBILITIES"}</span><h3>{tab === "requests" ? "Feature requests" : "Comparisons"}</h3></div>{tab === "requests" && <button className="dark-button" onClick={() => setForm("request")} disabled={!currentProject || preview || busy}><Plus size={17}/> Add request</button>}</div>
           {tab === "requests" ? <><div className="board-instruction"><CircleHelp size={17}/><span>Select two requests from different owners to compare their overlap.</span></div><div className="request-list">{requests.length ? requests.map((request, index) => <button key={request.id} className={`request-card ${selected.includes(request.id) ? "selected" : ""}`} onClick={() => toggle(request.id)} aria-pressed={selected.includes(request.id)}><span className="pick-box">{selected.includes(request.id) && <Check size={14}/>}</span><span className="request-content"><span className="request-eyebrow">REQUEST {String(index + 1).padStart(2, "0")} <span>·</span> {request.merged_into ? "MERGED" : "OPEN"}</span><strong>{request.title}</strong><span className="request-description">{request.details}</span><span className="request-meta">{request.requirements.length} requirements <span>·</span> {shortAddress(request.author)}</span></span><ArrowUpRight className="request-arrow" size={18}/></button>) : <div className="empty-state"><Layers3 size={25}/><strong>No requests yet</strong><p>Start with two requests from different owners.</p></div>}</div><div className="comparison-dock"><div className="dock-icons"><span>{selected[0] ? "1" : "+"}</span><span>{selected[1] ? "2" : "+"}</span></div><div><strong>{selected.length === 2 ? "Ready to compare" : selected.length === 1 ? "Choose one more request" : "Start with two requests"}</strong><p>{selected.length === 2 ? `${chosenA?.title} + ${chosenB?.title}` : "Different owners make a shared brief meaningful."}</p></div><button onClick={() => { if (selectedDistinctPair(selected[0], selected[1])) requestAction({ method: "compare_requests", args: [selected[0], selected[1]], label: "Compare requests", description: `Ask GenLayer validators whether “${chosenA?.title}” and “${chosenB?.title}” can share a brief. The result will be public.` }); }} disabled={!selectedDistinctPair(selected[0], selected[1]) || chosenA?.author === chosenB?.author || preview || busy}>Compare pair <ArrowRight size={16}/></button></div>{selected.length === 2 && chosenA?.author === chosenB?.author && <p className="inline-error">Choose requests from two different wallets.</p>}</> : <div className="comparison-list">{comparisons.length ? comparisons.map(c => <button key={c.id} className={`comparison-row ${activeComparisonId === c.id ? "active" : ""}`} onClick={() => setActiveComparisonId(c.id)}><span className={`result-dot ${c.result.status.toLowerCase()}`}/><span><strong>{requests.find(r => r.id === c.request_a_id)?.title || "Request A"}</strong><small>with {requests.find(r => r.id === c.request_b_id)?.title || "Request B"}</small></span><em>{c.result.status === "MERGEABLE" ? c.state === "MERGED" ? "Merged" : "Mergeable" : c.result.status === "SEPARATE" ? "Separate" : "Unclear"}</em><ArrowRight size={16}/></button>) : <div className="empty-state"><GitMerge size={25}/><strong>No comparisons yet</strong><p>Choose two requests to see what they share.</p></div>}</div>}</div>

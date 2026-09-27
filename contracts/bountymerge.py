@@ -129,7 +129,10 @@ def audit_agrees(raw, proposed: dict, a: dict, b: dict) -> bool:
         return False
     expected_a = len(a["requirements"]) if proposed["status"] == "MERGEABLE" else 0
     expected_b = len(b["requirements"]) if proposed["status"] == "MERGEABLE" else 0
-    return raw.get("coverage_a") == [True] * expected_a and raw.get("coverage_b") == [True] * expected_b
+    coverage_a, coverage_b = raw.get("coverage_a"), raw.get("coverage_b")
+    return (isinstance(coverage_a, list) and isinstance(coverage_b, list)
+            and len(coverage_a) == expected_a and len(coverage_b) == expected_b
+            and all(type(value) is bool and value for value in coverage_a + coverage_b))
 
 
 def compare_with_consensus(a: dict, b: dict) -> dict:
@@ -166,6 +169,7 @@ class BountyMerge(gl.contract.Contract):
     pair_latest: TreeMap[str, str]
     pair_rounds: TreeMap[str, u256]
     merged_request: TreeMap[str, str]
+    active_comparison: TreeMap[str, str]
 
     def __init__(self):
         pass
@@ -256,8 +260,10 @@ class BountyMerge(gl.contract.Contract):
         pair = digest([POLICY, "pair", sorted([request_a_id, request_b_id])])
         if pair in self.pair_latest:
             previous = self.get_comparison(self.pair_latest[pair])
-            if previous["state"] != "REJECTED":
+            if previous["state"] not in ("REJECTED", "CLOSED"):
                 fail("PAIR_ALREADY_COMPARED")
+        if request_a_id in self.active_comparison or request_b_id in self.active_comparison:
+            fail("REQUEST_HAS_PENDING_COMPARISON")
         round_number = int(self.pair_rounds[pair]) if pair in self.pair_rounds else 0
         result = compare_with_consensus(a, b)
         comparison_id = digest([POLICY, "comparison", pair, round_number])
@@ -267,6 +273,9 @@ class BountyMerge(gl.contract.Contract):
             "author_a": a["author"], "author_b": b["author"], "pair": pair, "round": round_number,
             "result": result, "state": state, "approved_a": False, "approved_b": False,
             "created_at": gl.message.raw["datetime"], "updated_at": gl.message.raw["datetime"]})
+        if state == "AWAITING_APPROVAL":
+            self.active_comparison[request_a_id] = comparison_id
+            self.active_comparison[request_b_id] = comparison_id
         self.pair_latest[pair] = comparison_id
         self.pair_rounds[pair] = u256(round_number + 1)
         count = self.comparison_counts[a["project_id"]]
@@ -311,6 +320,8 @@ class BountyMerge(gl.contract.Contract):
             record["state"] = "MERGED"
             self.merged_request[record["request_a_id"]] = comparison_id
             self.merged_request[record["request_b_id"]] = comparison_id
+            self.active_comparison.pop(record["request_a_id"])
+            self.active_comparison.pop(record["request_b_id"])
         record.pop("found")
         self.comparisons[comparison_id] = json.dumps(record)
 
@@ -325,5 +336,7 @@ class BountyMerge(gl.contract.Contract):
             fail("ONLY_REQUEST_OWNERS")
         record["state"] = "REJECTED"
         record["updated_at"] = gl.message.raw["datetime"]
+        self.active_comparison.pop(record["request_a_id"])
+        self.active_comparison.pop(record["request_b_id"])
         record.pop("found")
         self.comparisons[comparison_id] = json.dumps(record)
