@@ -4,7 +4,9 @@ BountyMerge helps two people discover whether their feature requests can be serv
 
 ## Current status
 
-The contract is deployed on Studio Next (61997), and a live two-wallet comparison-and-approval flow has finalized successfully. The production frontend points to the verified deployment in `.env.production`. See [`deployments/studio-next.json`](deployments/studio-next.json) for the address, exact source hash, transaction hashes, validator votes, and final state. The public app is at https://bountymerge-studionet.vercel.app/. The GitHub repository is currently private; make it public before a submission requiring source access. Visual browser QA and a user-wallet signing walkthrough are still pending, so do not describe those as verified.
+The contract is deployed on Studio Next (61997), and a live two-wallet comparison-and-approval flow has finalized successfully. The production frontend points to the verified deployment in `.env.production`. See [`deployments/studio-next.json`](deployments/studio-next.json) for the address, exact source hash, transaction hashes, validator votes, and final state. The public app is at https://bountymerge-studionet.vercel.app/. The GitHub repository is currently private; make it public before a submission requiring source access.
+
+A manual MetaMask walkthrough on 2026-09-27 also verified the public frontend against Studio Next. Two wallet owners created requests, an intentionally incomplete pair closed as `UNCLEAR` without producing a shared brief, and a clarified pair returned `MERGEABLE`. Each owner approved the immutable brief from a different wallet, after which the UI reported `MERGED` while preserving the original requests. This verifies wallet connection, network switching, signed project/request/comparison writes, finalized-result refresh, and the two-owner approval path through the deployed app.
 
 ## How the workflow works
 
