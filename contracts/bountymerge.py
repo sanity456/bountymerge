@@ -69,7 +69,11 @@ def parse_comparison(raw, a: dict, b: dict) -> dict:
         if not 1 <= len(lines) <= 8 or len(ca) != len(a["requirements"]) or len(cb) != len(b["requirements"]):
             raise gl.vm.UserError("[LLM_ERROR] MISSING_COVERAGE")
         if any(not isinstance(line, str) or not 8 <= len(line.strip()) <= 240 for line in lines):
-            raise gl.vm.UserError("[LLM_ERROR] INVALID_LINE")
+            # Fail closed without bricking fee simulation: malformed model
+            # output cannot produce an approval-ready merge.
+            return {"status": "UNCLEAR",
+                    "reason": "The proposed shared brief did not meet the required format, so no merge is recommended.",
+                    "brief_lines": [], "coverage_a": [], "coverage_b": []}
         if any(type(index) is not int or not 0 <= index < len(lines) for index in ca + cb):
             raise gl.vm.UserError("[LLM_ERROR] INVALID_COVERAGE_INDEX")
     elif lines or ca or cb:
@@ -93,6 +97,9 @@ Keep the reason under 450 characters. Name the overlap, conflict, or missing det
 mention any material exclusion. Do not answer with just yes or no.
 For MERGEABLE, every original requirement must map, in order, to a zero-based
 brief line that actually preserves it. Preserve material exclusions in the brief.
+Every brief_lines item MUST be between 8 and 240 characters. Use complete,
+actionable sentences rather than short labels or abbreviations. If a valid shared
+brief cannot be written within those bounds, return UNCLEAR with all three arrays empty.
 For SEPARATE or UNCLEAR use empty arrays for brief_lines and both coverage lists.
 DATA:
 """ + json.dumps({"request_a": a, "request_b": b}, ensure_ascii=False)

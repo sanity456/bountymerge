@@ -45,8 +45,21 @@ export async function quoteAndSubmit(provider: Provider, account: `0x${string}`,
   if (!Number.isSafeInteger(timestamp) || timestamp <= 0) throw Error("Invalid chain timestamp.");
   const data = abi.transactions.serialize([abi.calldata.encode(abi.calldata.makeCalldataObject(method, args, undefined)), false]);
   const fees = JSON.parse(JSON.stringify({ distribution: baseline.distribution, feeValue: baseline.feeValue, messageAllocations: baseline.messageAllocations }, (_, v) => typeof v === "bigint" ? v.toString() : v));
-  const simulation = await client.request({ method: "sim_estimateTransactionFees", params: [{ type: "write", to: CONTRACT, from: account, data, transaction_hash_variant: "latest-final", fees,
-    sim_config: { genvm_datetime: new Date(timestamp * 1000).toISOString() } }] }) as { receipt?: { execution_result?: string }; recommendedPreset?: { distribution?: Parameters<typeof createFeesDistribution>[0]; feeValue?: string | number; messageAllocations?: Parameters<typeof normalizeMessageFeeAllocations>[0] } };
+  let simulation: { receipt?: { execution_result?: string }; recommendedPreset?: { distribution?: Parameters<typeof createFeesDistribution>[0]; feeValue?: string | number; messageAllocations?: Parameters<typeof normalizeMessageFeeAllocations>[0] } };
+  try {
+    simulation = await client.request({ method: "sim_estimateTransactionFees", params: [{ type: "write", to: CONTRACT, from: account, data, transaction_hash_variant: "latest-final", fees,
+      sim_config: { genvm_datetime: new Date(timestamp * 1000).toISOString() } }] }) as typeof simulation;
+  } catch (error) {
+    const encoded = (error as { cause?: { data?: { receipt?: { result?: unknown } } } }).cause?.data?.receipt?.result;
+    let detail = "";
+    if (typeof encoded === "string") {
+      try { detail = new TextDecoder().decode(Uint8Array.from(atob(encoded), char => char.charCodeAt(0))).replace(/[\x00-\x1f]+/g, " ").trim(); }
+      catch { /* Fall back to the RPC's readable message below. */ }
+    }
+    if (detail.includes("[LLM_ERROR] INVALID_LINE"))
+      throw Error("GenLayer could not produce a valid shared brief during simulation. No transaction was sent; retry after the contract update.");
+    throw Error(`Studio Next simulation failed${detail ? `: ${detail}` : ""}. No transaction was sent.`);
+  }
   const preset = simulation.recommendedPreset;
   if (simulation.receipt?.execution_result !== "SUCCESS" || !preset?.distribution || preset.feeValue == null || !/^\d+$/.test(String(preset.feeValue)))
     throw Error("The contract simulation failed. No transaction was sent.");
