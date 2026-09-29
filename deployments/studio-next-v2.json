@@ -2,12 +2,13 @@
   "chain_id": 61997,
   "rpc": "https://studio-dev.genlayer.com/api",
   "policy": "bountymerge/pair-v4",
-  "contract_address": "0xf274D6FB3A7A4e945cf9D3eDfd6Fe237A7FA9591",
-  "source_sha256": "6a7f9ae7466243c07ded44c6af50e64d462367a463175c70056a5d2856acf2fd",
-  "deployment_transaction": "0x0b55e1a41bb16fca50cb96fbcecc23cb72e1ab875d9b481e68b51517843f64b1",
+  "contract_address": "0xdFf2f0E3d092c8F5c82b9619946B56905674d4ff",
+  "source_sha256": "00680bc16cc5dc0d3b144f4ef8d1042a476d1befede7cf69250a499ddd3827c2",
+  "deployment_transaction": "0x1b3ccf38f0404f5ca0bbac836790921552fd6565ef2ac97dc314d5864603cf38",
   "status": "FINALIZED",
-  "previous_contract_address": "0xCd4E91dFC068c1a646f5EB98ADc6dB6Cbe6F6E9a",
+  "previous_contract_address": "0xf274D6FB3A7A4e945cf9D3eDfd6Fe237A7FA9591",
   "unused_duplicate_deployment_address": "0x481ecC94f5A321255F0a30056414a2d208A71d6A",
-  "prior_previous_contract_address": "0xeBf490623C62C030905c9Ea7cD079DE7Eb3D0A3E",
+  "prior_previous_contract_address": "0xCd4E91dFC068c1a646f5EB98ADc6dB6Cbe6F6E9a",
+  "older_previous_contract_address": "0xeBf490623C62C030905c9Ea7cD079DE7Eb3D0A3E",
   "state_migrated": false
 }

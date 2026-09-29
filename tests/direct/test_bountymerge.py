@@ -145,6 +145,23 @@ def test_short_model_brief_fails_closed_without_bricking_comparison(board, direc
     assert comparison["state"] == "CLOSED"
 
 
+def test_invalid_coverage_index_fails_closed_without_bricking_comparison(board, direct_vm, direct_alice):
+    contract, project, first, second = board
+    direct_vm.sender = direct_alice
+    malformed = candidate()
+    malformed["coverage_a"][0] = len(malformed["brief_lines"])
+    direct_vm.mock_llm("^BOUNTYMERGE_COMPARE_V1", json.dumps(malformed))
+
+    contract.compare_requests(first, second)
+    comparison = contract.list_comparisons(project, 0, 20)["items"][0]
+
+    assert comparison["result"]["status"] == "UNCLEAR"
+    assert comparison["result"]["brief_lines"] == []
+    assert comparison["result"]["coverage_a"] == []
+    assert comparison["result"]["coverage_b"] == []
+    assert comparison["state"] == "CLOSED"
+
+
 def test_submission_guards(board, direct_vm, direct_alice, direct_bob, direct_charlie):
     contract, project, first, second = board
     direct_vm.sender = direct_alice

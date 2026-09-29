@@ -67,7 +67,9 @@ def parse_comparison(raw, a: dict, b: dict) -> dict:
         raise gl.vm.UserError("[LLM_ERROR] INVALID_BRIEF")
     if raw["status"] == "MERGEABLE":
         if not 1 <= len(lines) <= 8 or len(ca) != len(a["requirements"]) or len(cb) != len(b["requirements"]):
-            raise gl.vm.UserError("[LLM_ERROR] MISSING_COVERAGE")
+            return {"status": "UNCLEAR",
+                    "reason": "The proposed shared brief did not map every requirement, so no merge is recommended.",
+                    "brief_lines": [], "coverage_a": [], "coverage_b": []}
         if any(not isinstance(line, str) or not 8 <= len(line.strip()) <= 240 for line in lines):
             # Fail closed without bricking fee simulation: malformed model
             # output cannot produce an approval-ready merge.
@@ -75,7 +77,9 @@ def parse_comparison(raw, a: dict, b: dict) -> dict:
                     "reason": "The proposed shared brief did not meet the required format, so no merge is recommended.",
                     "brief_lines": [], "coverage_a": [], "coverage_b": []}
         if any(type(index) is not int or not 0 <= index < len(lines) for index in ca + cb):
-            raise gl.vm.UserError("[LLM_ERROR] INVALID_COVERAGE_INDEX")
+            return {"status": "UNCLEAR",
+                    "reason": "The proposed shared brief had an invalid requirement mapping, so no merge is recommended.",
+                    "brief_lines": [], "coverage_a": [], "coverage_b": []}
     elif lines or ca or cb:
         raise gl.vm.UserError("[LLM_ERROR] NONMERGE_HAS_BRIEF")
     return {"status": raw["status"], "reason": reason, "brief_lines": lines,
@@ -96,7 +100,8 @@ Return JSON: {"status":"MERGEABLE|SEPARATE|UNCLEAR","reason":"specific explanati
 Keep the reason under 450 characters. Name the overlap, conflict, or missing detail;
 mention any material exclusion. Do not answer with just yes or no.
 For MERGEABLE, every original requirement must map, in order, to a zero-based
-brief line that actually preserves it. Preserve material exclusions in the brief.
+brief line within brief_lines that actually preserves it. Every coverage index
+must be between zero and the last brief line. Preserve material exclusions in the brief.
 Every brief_lines item MUST be between 8 and 240 characters. Use complete,
 actionable sentences rather than short labels or abbreviations. If a valid shared
 brief cannot be written within those bounds, return UNCLEAR with all three arrays empty.
